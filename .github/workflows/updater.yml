@@ -1,7 +1,7 @@
 name: Python Script Workflow to update the song source db
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
 
 jobs:
   run-python-script:
