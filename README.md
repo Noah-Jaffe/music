@@ -7,3 +7,19 @@ then the musicplayer.html file should be able to read from it to know which song
 
 ### how i get source urls:
 github actions that run periodically to update our song list.
+
+# Components
+1. [Generate song list](#songFinder)
+2. [Get song srcs](#songSrc)
+
+<a name="songFinder"></a>
+## Generate song list 
+Use generateSongList.py to find the songs we want to listen to
+Rule: do not remove old songs
+
+<a name="songSrc"></a>
+## Get song srcs 
+Triggers on: 
+  - Periodically
+  - After the song list generator adds a new song 
+
