@@ -1,4 +1,4 @@
-[
+const SONG_LIST = [
   {
     "artist": "RONS",
     "name": "Podcast #405",
