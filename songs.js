@@ -1,4 +1,4 @@
-const SONG_LIST = [
+const PLAYLIST_SONGS = [
   {
     "artist": "RONS",
     "name": "Podcast #405",
