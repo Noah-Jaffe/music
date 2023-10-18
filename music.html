@@ -16,7 +16,8 @@
 	#log_table:has(#log_table_body:empty) { display: none; }  /* The :has modifier does not work in firefox just yet. */
 	#log_table { font-size:10pt; word-wrap:break-word; font-family: Consolas, monaco, monospace; }
 </style>
-<script src="songs.json"></script>
+<script type="text/javascript" src="songs.js"></script>
+
 </head>
 <body>
 	<button id="PLAY" onclick="let x=document.querySelector('audio');document.querySelectorAll('[hidden]').forEach(e=>e.hidden=false);x.muted=true;x.muted=false;x.volume=mobileCheck()?1:(x.volume?x.volume : 1);x.play();document.querySelector('#PLAY').remove()">▶️</button>
