@@ -3,8 +3,18 @@ from bs4 import BeautifulSoup
 import re
 import csv
 import os
+import json
 
 SONG_PATH = os.path.abspath(os.getcwd()) + "/songs.csv"
+EXISTING_SONGS_PATH = os.path.abspath(os.getcwd()) + "/songs.js"
+
+def getExistingSongs():
+    with open(EXISTING_SONGS_PATH, 'r', encoding='utf-8') as f:
+        data = f.read()
+        # remove js compatablility garbage
+        data = data[data.find("["):]
+    return data
+
 
 def getMixcloudSrcUrl(mixcloud_url):
     DL_MIXCLOUD_URL = "https://mixclouddownloader.net/"
@@ -51,6 +61,16 @@ def updateSongSrcs(songDbFile):
     # TODO: commit changes?
           
         
-  
+
+def generateSongList(): 
+    """
+    Runs all of the song generator functions. 
+    RETURNS:
+        list<dict> jsonlike data for the songs.
+    """
+    pass
+    # TODO: generate new song list via this func.
+    # TODO: update song list file if needed
+
 if __name__ == "__main__":
     updateSongSrcs(SONG_PATH)
