@@ -1,3 +1,4 @@
+## this needs to be updated to write to songs.json
 import requests
 from bs4 import BeautifulSoup
 import re
