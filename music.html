@@ -71,7 +71,8 @@
 
 	async function forTesting() {
 		const songEndpoint = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')+1) + "songs.json"
-		let result = await fetch(songEndpoint).json();
+		let req = await fetch(songEndpoint);
+		let result = req.json();
 		return result;
 	}
 	
