@@ -63,9 +63,9 @@ class Util {
 
 /** Logging system to console and table on page. Expects one logger table to exist per static scope.*/
 class Logger {
-	static private loggerContainer;
-	static private loggerContainerId = "__LOGGER_CONTAINER__";
-	static private loggerContainerTableId = "__LOGGER_CONTAINER_TABLE__";
+	static #loggerContainer;
+	static #loggerContainerId = "__LOGGER_CONTAINER__";
+	static #loggerContainerTableId = "__LOGGER_CONTAINER_TABLE__";
 	/** Attaches an HTML table for logging to the given element.
 	* NOTE: not really needed if the table is hardcoded in the HTML
 	* @param {HTMLElement} elementToAttachTo
@@ -135,7 +135,7 @@ class Logger {
 	* @param {HTMLElement} el the element to be dissapered
 	* @param {*} seconds the seconds to dissapear after
 	*/
-	static private async removeFadeOutAfter(el, seconds) {
+	static async #removeFadeOutAfter(el, seconds) {
 		setTimeout(() => {
 			el.style.transition = "opacity 1s ease";
 			el.style.opacity = 0;
@@ -349,14 +349,14 @@ class MediaSessionControls {
 	static nextslide() {
 		this._notImplemented(arguments.callee.name);
 	}
-	static private _notImplemented(name) {
+	static #_notImplemented(name) {
 		Logger.log(`MediaSessionControls function not implemented: ${name}`, 5);
 	}
 }
 
 class MediaSessionControls2 {
-	private audioElement = null;
-	private default_skip_time = 60;
+	#audioElement = null;
+	#default_skip_time = 60;
 
 	/**
 	* Binds all the neccessary action handlers.
@@ -394,7 +394,7 @@ class MediaSessionControls2 {
 			['previousslide',
 				this.previousslide],
 			['nextslide',
-				this.nextslide];
+				this.nextslide]
 		];
 		for (const [action, handler] of action_handlers) {
 			try {
@@ -495,7 +495,7 @@ class MediaSessionControls2 {
 	nextslide() {
 		this._notImplemented(arguments.callee.name);
 	}
-	private _notImplemented(name) {
+	#_notImplemented(name) {
 		var err = new Error(`Warning: MediaSessionControls.${name} has not been implemented!`);
 		Logger.log(err.stack, 0);
 	}
