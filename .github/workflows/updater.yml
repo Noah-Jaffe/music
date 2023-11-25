@@ -16,12 +16,9 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Install Dependencies1
-      run: pip install requests
+    - name: Install Dependencies
+      run: pip install -r requirements.txt
       
-    - name: Install Dependencies2
-      run: pip install beautifulsoup4
-
     - name: Run Python Script
       run: python updateSongSrcs.py
 
