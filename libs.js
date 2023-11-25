@@ -25,7 +25,7 @@ class Util {
       try {
         return await fetch(url);
       } catch (err) {
-        if (!err.message.startswith("NetworkError")) {
+        if (!err.message.startsWith("NetworkError")) {
           throw err;
         }
         // else it is a network error, so keep waiting until we timeout in 60 seconds
@@ -70,6 +70,33 @@ class Util {
         (navigator.userAgent || navigator?.vendor || window.opera).substr(0, 4)
       )
     );
+  }
+
+  /**
+   * dynamic purejs way of loading an external src script
+   * Used for:
+   * - To fetch/load the SongsDb from songs.js, if songs.json is unreachable.
+   * - For dynamically fetching the appropriate subset of srcs for the webpage visuals.
+   * @param {*} FILE_URL 
+   */
+  static loadJS(FILE_URL) {
+    let scriptEle = document.createElement("script");
+  
+    scriptEle.setAttribute("src", FILE_URL);
+    scriptEle.setAttribute("type", "text/javascript");
+    scriptEle.setAttribute("async", false);
+  
+    document.body.appendChild(scriptEle);
+  
+    // success event 
+    scriptEle.addEventListener("load", () => {
+      Logger.log(`Loaded ${FILE_URL}`, 2);
+    });
+     // error event
+    scriptEle.addEventListener("error", (ev) => {
+      Logger.log(`Error loading ${FILE_URL}`, 2);
+      console.error(ev);
+    });
   }
 }
 
@@ -202,7 +229,7 @@ class PersistentData {
     if (key == null) {
       return key;
     }
-    key = key.toString().startswith(window.location.pathname)
+    key = key.toString().startsWith(window.location.pathname)
       ? key.toString()
       : `${window.location.pathname}.${key.toString()}`;
     if (mode in [-1, 0]) {
@@ -230,7 +257,7 @@ class PersistentData {
     }
     return JSON.parse(
       localStorage.getItem(
-        key.toString().startswith(window.location.pathname)
+        key.toString().startsWith(window.location.pathname)
           ? key.toString()
           : `${window.location.pathname}.${key.toString()}`
       )
@@ -246,8 +273,8 @@ class MediaSessionControls {
    * Binds all the neccessary action handlers.
    */
   constructor() {
-    if (!this.audioElement) {
-      this.audioElement = document.querySelector("audio");
+    if (!this.#audioElement) {
+      this.#audioElement = document.querySelector("audio");
     }
     if (!("mediaSession" in navigator)) {
       Logger.log(`No mediaSession in navigator?`, 0);
@@ -271,15 +298,15 @@ class MediaSessionControls {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch (error) {
-        Logger.log(`ActionHandler ${action} failed to bind.`, 0);
+        Logger.log(`Failed to set navigator.mediaSession ActionHandler of ${action}.`, 2);
       }
     }
     try {
       // Set playback event listeners
-      this.audioElement.addEventListener("play", () => {
+      this.#audioElement.addEventListener("play", () => {
         navigator.mediaSession.playbackState = "playing";
       });
-      this.audioElement.addEventListener("pause", () => {
+      this.#audioElement.addEventListener("pause", () => {
         navigator.mediaSession.playbackState = "paused";
       });
     } catch (err) {
@@ -293,22 +320,22 @@ class MediaSessionControls {
   // The action handler activities
   play() {
     Logger.log("play +");
-    this.audioElement.play();
+    this.#audioElement.play();
     Logger.log("play -");
   }
   pause() {
     Logger.log("pause +");
-    this.audioElement.pause();
+    this.#audioElement.pause();
     Logger.log("pause -");
   }
   stop() {
     Logger.log("stop +");
-    this.audioElement.pause();
+    this.#audioElement.pause();
     Logger.log("stop -");
   }
   previoustrack() {
     Logger.log("previoustrack +");
-    if (this.audioElement.currentTime > 5) {
+    if (this.#audioElement.currentTime > 5) {
       audioElement.currentTime = 0;
     } else {
       Logger.log("// TODO `previoustrack` needs to play previous!", 0);
@@ -322,42 +349,42 @@ class MediaSessionControls {
   }
   seekbackward() {
     Logger.log("seekbackward +");
-    const skip_time = arguments.seekOffset || this.default_skip_time;
-    this.audioElement.currentTime = Math.max(
-      this.audioElement?.currentTime - skip_time,
+    const skip_time = arguments.seekOffset || this.#default_skip_time;
+    this.#audioElement.currentTime = Math.max(
+      this.#audioElement?.currentTime - skip_time,
       0
     );
     navigator.mediaSession.setPositionState({
-      duration: this.audioElement?.duration,
-      playbackRate: this.audioElement?.playbackRate,
-      position: this.audioElement?.currentTime,
+      duration: this.#audioElement?.duration,
+      playbackRate: this.#audioElement?.playbackRate,
+      position: this.#audioElement?.currentTime,
     });
     Logger.log("seekbackward -");
   }
   seekforward() {
     Logger.log("seekforward +");
-    const skip_time = arguments.seekOffset || this.default_skip_time;
-    this.audioElement.currentTime = Math.min(
-      this.audioElement?.currentTime + skip_time,
+    const skip_time = arguments.seekOffset || this.#default_skip_time;
+    this.#audioElement.currentTime = Math.min(
+      this.#audioElement?.currentTime + skip_time,
       0
     );
     navigator.mediaSession.setPositionState({
-      duration: this.audioElement?.duration,
-      playbackRate: this.audioElement?.playbackRate,
-      position: this.audioElement?.currentTime,
+      duration: this.#audioElement?.duration,
+      playbackRate: this.#audioElement?.playbackRate,
+      position: this.#audioElement?.currentTime,
     });
     Logger.log("seekforward -");
   }
   seekto() {
     Logger.log("seekto +");
-    if (arguments.fastSeek && "fastSeek" in this.audioElement) {
-      this.audioElement.fastSeek(arguments.seekTime);
+    if (arguments.fastSeek && "fastSeek" in this.#audioElement) {
+      this.#audioElement.fastSeek(arguments.seekTime);
     } else {
-      this.audioElement.currentTime = arguments.seekTime;
+      this.#audioElement.currentTime = arguments.seekTime;
     }
     navigator.mediaSession.setPositionState({
-      duration: this.audioElement.duration,
-      playbackRate: this.audioElement.playbackRate,
+      duration: this.#audioElement.duration,
+      playbackRate: this.#audioElement.playbackRate,
       position: arguments.seekTime,
     });
     Logger.log("seekto -");
@@ -369,8 +396,8 @@ class MediaSessionControls {
     this._notImplemented(arguments.callee.name);
   }
   hangup() {
-    if (this.audioElement?.currentTime > 0) {
-      this.audioElement.play();
+    if (this.#audioElement?.currentTime > 0) {
+      this.#audioElement.play();
     }
   }
   previousslide() {
@@ -514,24 +541,8 @@ class DEBUG {
     );
   }
 
-  // used to load local js file when on localhost without server.
-  static loadJS(FILE_URL) {
-    let scriptEle = document.createElement("script");
-  
-    scriptEle.setAttribute("src", FILE_URL);
-    scriptEle.setAttribute("type", "text/javascript");
-    scriptEle.setAttribute("async", false);
-  
-    document.body.appendChild(scriptEle);
-  
-    // success event 
-    scriptEle.addEventListener("load", () => {
-      Logger.log(`Loaded ${FILE_URL}`)
-    });
-     // error event
-    scriptEle.addEventListener("error", (ev) => {
-      console.log(`Error on loading file: ${FILE_URL}`, ev);
-    });
+  static listAllPersistentData() {
+    Logger.log(localStorage, 60)
   }
 }
 

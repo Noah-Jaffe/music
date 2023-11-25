@@ -6,6 +6,8 @@ import os
 import json
 import threading
 from time import time,sleep
+from sys import exit as abortScript
+from datetime import timedelta
 
 class _ReturnableThread(threading.Thread):
     """
@@ -21,18 +23,59 @@ class _ReturnableThread(threading.Thread):
         threading.Thread.join(self, *args)
         return self._return
 
+# __DEBUG_MODE__ (bool, nullable): Global placeholder. To be set once the env.json is read in.
 __DEBUG_MODE__ = None
+
+
+def main():
+    global __DEBUG_MODE__
+    start = time()
+    # load env vars
+    env = getEnvData()
+    __DEBUG_MODE__ = env.get("__DEBUG_MODE__")
+    print(f"DEBUG MODE IS: {'en' if __DEBUG_MODE__ else 'dis'}abled")
+    
+    # default to 'songs.json' if the env var was never setup
+    if not env.get("SONGS_FILE_PATH"):
+        abortScript('env file is missing key: "SONGS_FILE_PATH". This is required (string), the file path to the song file that is to be updated.')
+    songs_file_path = f'{os.getcwd()}/{env["SONGS_FILE_PATH"]}.json'
+    
+    # find any updates needed
+    new_songs_db = generateSongListFromFilters(env.get("SONG_FILTERS", []))
+    songs_db = getExistingSongsFromFilePath(songs_file_path)
+
+
+    # merge in the songs/sources that we havent seen yet
+    songs_db = mergeSongDbs(existing=songs_db, new=new_songs_db)
+    elapsed = time()-start
+    print(f"RUNTIME: {timedelta(seconds=elapsed)}")
+    if songs_db:
+        songs_db = json.dumps(songs_db, indent=2)
+        with open(songs_file_path,'w',encoding='utf-8') as f:
+            f.write(songs_db)
+        if __DEBUG_MODE__:
+            # in debug mode also write the data into a js readable file. This way the music html page can gracefully handle the CORS issue when trying to fetch the songs.json from a non server location (ex. running locally from desktop).
+            with open(songs_file_path[:-2],'w',encoding='utf-8') as f:
+                f.write("var SongDb = ")
+                f.write(songs_db)
+        print("UPDATED!")
+    else:
+        print("No updates needed!")
+
 def getEnvData() -> any:
     """
     Returns:
         any: the contents of the env.json as a python object
     """
-    with open("env.json",'r',encoding='utf-8') as f:
-        env = json.load(f)
+    env = {}
+    try:
+        with open("env.json",'r',encoding='utf-8') as f:
+            env = json.load(f)
+    except:
+        pass
     return env
 
-
-def getExistingSongs(file_path:str) -> list:
+def getExistingSongsFromFilePath(file_path:str) -> list:
     """Loads the existing songs from the given file
 
     Args:
@@ -54,10 +97,7 @@ def getExistingSongs(file_path:str) -> list:
         print(f"{len(data)} songs in {file_path}")
     return data
 
-def hashSong(song:dict):
-    return ".".join([(str(song.get(k)) or '') for k in ["artist", "name"]])
-
-def getMergedSongDb(existing:list, new:list) -> list:
+def mergeSongDbs(existing:list, new:list) -> list:
     """Merge the two lists, without deleting any songs not picked up by the new list.
 
     Args:
@@ -68,21 +108,63 @@ def getMergedSongDb(existing:list, new:list) -> list:
         list: the new song list
     """
     # is there a better way to do this that isnt O(len(nsong)*len(esong))?
-    # too lazy to figure out the merge for now, so just add each as new lol?
-    brand_new_songs = []
-    for n in new:
-        nsrc = set(n.get('src',[]))
-        found_existing = False
-        for e in existing:
-            esrc = set(e.get('src',[]))
-            matching_srcs = esrc & nsrc
-            if matching_srcs:
-                e['src'] = list(nsrc | esrc)
-                found_existing = True
-                break
-        if not found_existing:
-            brand_new_songs.append(n)
-    return existing + brand_new_songs
+    # maybe with a better way of hashing but idk if thats just too much overhead or if it actually solves the problem?
+    db = {}
+    all_songs = existing + new
+    while all_songs:
+        e = all_songs.pop()
+        if e['_uid'] not in db:
+            # first time its seen, needs to be added
+            db[e['_uid']] = e
+        else:
+            # needs a merge
+            for k in e:
+                # join or overwrite all elements from the current song into the merged db song
+                if type(e[k]) == list:
+                    # list type, so do a join so you dont lose any data.
+                    if not db[e['_uid']].get(k):
+                        db[e['_uid']][k] = e[k]
+                        continue
+                    for v in e[k]:
+                        if v not in db[e['_uid']][k]:
+                            db[e['_uid']][k].append(v)
+                else:
+                    # non list type, so do an overwrite and assume the old value is outdated.
+                    db[e['_uid']][k] = e[k]
+    return list(db.values())
+
+def normalizeSongUIDs(normalizerActs:list, songs:list) -> list:
+    """Normalizes the songs _uid attributes with the given normalizerActs.
+    Used with SONG_FILTERS.ENTRY."UIDNormalizationCode"
+       # TODO: will need to code new actions in this function.
+
+    Args:
+        normalizerActs (list): list where each element is a list of values. where the first element in this sublist is the action to be handled and the rest are the arguments.
+        songs (list): list of dict-like songs.
+
+    Returns:
+        list: the songs with updated _uid's.
+    """
+    for song in songs:
+        new_uid = ""
+        for act in normalizerActs:
+            argAct = str(act[0]).strip().lower()
+            if argAct == "literal":
+                try:
+                    new_uid += str(act[1])
+                except:
+                    abortScript(f'Invalid arg to UIDNormalizationCode action "{act[0]}", missing literal value as 2nd array value. From: {normalizerActs}')
+            elif argAct == "extractallalphanumeric":
+                if not act[1] or str(act[1]) not in song:
+                    abortScript(f'Invalid arg to UIDNormalizationCode action "{act[0]}", 2nd array value needs to be valid song key, was given <{repr(str(act[1]))}>. From: {normalizerActs}')
+                try:
+                    new_uid += ''.join(re.findall(r'\w', str(song[str(act[1])]).lower()))
+                except:
+                    abortScript(f'Invalid arg to UIDNormalizationCode code "{act[0]}", unable to extract all alphanumeric values from song["{act[1]}"]==<{repr(song[act[1]])}>.')
+            else:
+                abortScript(f'Invalid arg to UIDNormalizationCode code "{act[0]}", no code exists to handle such case. Will need to code it in to script function "normalizeSongUIDs".')
+        song['_uid'] = new_uid
+    return songs
 
 ######################
 # CODE TO FIND SONGS #
@@ -98,6 +180,7 @@ def generateSongListFromFilters(filters:list) -> list:
     """
     children = []
     all_songs = []
+
     for f in filters:
         source = f.get("source")
         generatorFunc = None
@@ -106,17 +189,16 @@ def generateSongListFromFilters(filters:list) -> list:
         elif source == "podomatic":
             generatorFunc = generateFromPodomatic
         # TODO: NEW SOURCES HERE
-        
-        if generatorFunc:
+        all_songs += generatorFunc(f)
+        """if generatorFunc:
             child = _ReturnableThread(target=generatorFunc, args=(f,))
             children.append(child)
             child.start()
 
     for child in children:
         song_list = child.join()
-        all_songs += song_list
+        all_songs += song_list"""
     return all_songs
-
 
 ####### MIXCLOUD ########
 def generateFromMixcloud(fltr):
@@ -128,6 +210,11 @@ def generateFromMixcloud(fltr):
             songs.append(getSongFromMixcloudSlug(f"{dj}/{key}"))
     else:
         songs += retreive_all_mixcloud_songs_from_artist(dj, fltr.get("songNameRegex"))
+    
+    # normalize _uid's for merging reasons.
+    if 'UIDNormalizationCode' in fltr:
+        songs = normalizeSongUIDs(fltr['UIDNormalizationCode'], songs)
+    
     return songs
 
 def retreive_all_mixcloud_songs_from_artist(name, song_regex) -> list:
@@ -153,13 +240,14 @@ def retreive_all_mixcloud_songs_from_artist(name, song_regex) -> list:
         if next_url:
             queue.append(next_url)
         # retreive the songs
-        new_thread = _ReturnableThread(target=_getMixcloudSrcUrls, args=(result.get('data', []), song_regex))
+        song_list += _getMixcloudSrcUrls(result.get('data', []), song_regex)
+        """new_thread = _ReturnableThread(target=_getMixcloudSrcUrls, args=(result.get('data', []), song_regex))
         new_thread.start()
         children.append(new_thread)
         
     for child in children:
         result = child.join()
-        song_list += result
+        song_list += result"""
         
     # TODO: normalize song names?
     return song_list
@@ -175,13 +263,24 @@ def _getMixcloudSrcUrls(records:list, song_regex) -> list:
     Returns:
         list: _description_
     """
+    max_retry_per_song = 2
     song_list = []
     for record in records:
         if song_regex:
             if not re.match(song_regex, record.get("name"), re.IGNORECASE|re.MULTILINE):
                 continue
         song = mixcloudJsonToSong(record)
-        song['thread'] = _ReturnableThread(target=_getMixcloudSrcUrl, args=(f"https://mixcloud.com{song['_uid']}",))
+        tryNum = 0
+        while tryNum < max_retry_per_song and (song.get('_mixcloud_slug') or len(song.get('src',[]))==0):
+            src = _getMixcloudSrcUrl(f"https://mixcloud.com{song['_mixcloud_slug']}")
+            if src:
+                song['src'].append(src)
+                del song['_mixcloud_slug']
+            else:
+                sleep(1)
+            tryNum += 1
+        song_list.append(song)
+        """song['thread'] = _ReturnableThread(target=_getMixcloudSrcUrl, args=(f"https://mixcloud.com{song['_mixcloud_slug']}",))
         song['thread'].start()
 
         song_list.append(song)
@@ -191,9 +290,10 @@ def _getMixcloudSrcUrls(records:list, song_regex) -> list:
         if result == None:
             # retry here
             sleep(.2)
-            result = _getMixcloudSrcUrl(f"https://mixcloud.com{song_list[i]['_uid']}")
+            result = _getMixcloudSrcUrl(f"https://mixcloud.com{song_list[i]['_mixcloud_slug']}")
         song_list[i]['src'].append(result)
         del song_list[i]['thread']
+        del song_list[i]['_mixcloud_slug']"""
     
     return song_list
 
@@ -258,13 +358,24 @@ def getSongFromMixcloudSlug(mixcloud_key):
     return song
 
 def mixcloudJsonToSong(record):
+    max_retry_per_song = 3
     song = {}   # name, artist, tags, thumb, src
     song['artist'] = record.get("user",{}).get("name")
     song['name'] = record.get("name")
     song['tags'] = [x['name'] for x in record.get("tags")]
     song['thumb'] = record.get("pictures",{}).get('large')
-    song['_uid'] = record.get('key')
+    song['_uid'] = f"{song['artist']}/{song['name']}"
     song['src'] = []
+    song['_mixcloud_slug'] = record.get('key')
+    tryNum = 0
+    while tryNum < max_retry_per_song and song.get('_mixcloud_slug'):
+        src = _getMixcloudSrcUrl(f"https://mixcloud.com{song['_mixcloud_slug']}")
+        if src:
+            song['src'].append(src)
+            del song['_mixcloud_slug']
+        else:
+            sleep(1)
+        tryNum += 1
     return song
 ##########################
 
@@ -273,6 +384,10 @@ def generateFromPodomatic(fltr):
     # TODO: update this func when new keys are introduced when SONG_FILTERS->"source" == "podomatic"
     songs = []
     songs += retreive_podomatic_songs_from_artist(fltr.get("name"), fltr.get("songNameRegex"), fltr.get("apiUserId"))
+
+    # normalize _uid's for merging reasons.
+    if 'UIDNormalizationCode' in fltr:
+        songs = normalizeSongUIDs(fltr['UIDNormalizationCode'], songs)
     return songs
 
 def retreive_podomatic_songs_from_artist(name, song_regex, api_user_id) -> list:
@@ -320,33 +435,6 @@ def podomaticJsonToSong(record):
             song['src'].append(record.get(srcKey))
     return song
 ##########################
-
-def main():
-    global __DEBUG_MODE__
-    start = time()
-    # load env vars
-    env = getEnvData()
-    __DEBUG_MODE__ = env.get("__DEBUG_MODE__")
-    print(f"DEBUG MODE IS: {'in' if not __DEBUG_MODE__ else ''}active")
-    # default to songs.json if it was never setup
-    songs_file_path = f'{os.getcwd()}/{env.get("SONGS_FILE_PATH","songs.json")}'
-    
-    # find any updates needed
-    #new_songs_db = generateSongListByArtist(env.get("BY_ARTISTS", {}))
-    new_songs_db = generateSongListFromFilters(env.get("SONG_FILTERS", []))
-    songs_db = getExistingSongs(songs_file_path)
-
-    # merge in the songs that we havent seen yet
-    songs_db = getMergedSongDb(existing=songs_db, new=new_songs_db)
-    elapsed = time()-start
-    print(f"TOOK {elapsed} SEC TO RUN")
-    if songs_db:
-        with open(songs_file_path,'w',encoding='utf-8') as f:
-            json.dump(songs_db, indent=2, fp=f)
-        print("UPDATED!")
-    else:
-        print("No updates needed!")
-
 
 if __name__ == "__main__":
     main()
