@@ -548,21 +548,208 @@ class DEBUG {
 
 
 class SongView {
-  #requiredScriptSrcs = [
-    "https://cdn.jsdelivr.net/npm/flatpickr",
-    "https://cdn.jsdelivr.net/npm/sortablejs/Sortable.min.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.core.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.interactions.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.grid.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.formatters.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.editors.js",
-    "https://github.com/6pac/SlickGrid/blob/master/dist/browser/slick.dataview.js",
-  ];
+  /**
+   * Generates a music selector table from the given song db data.
+   * @param {Array[song]} songdb the song array (from the songs.json/songs.js)
+   * @returns <table>
+   */
+  static getTableFromSongDb(songdb) {
+    var uid = crypto.randomUUID().replace("-","");
+    var table = document.createElement("table");
+    table.setAttribute("id",`table_${uid}`);
+    var thead = document.createElement("thead");
+    thead.setAttribute("id",`thead_${uid}`);
+    thead.appendChild(this.getHeaderRow());
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    tbody.setAttribute("id",`tbody_${uid}`);
+    if (Array.isArray(songdb)) {
+      songdb.forEach(song => {
+        tbody.appendChild(this.getDataRowFromSong(song));
+      });
+    }
+    table.appendChild(tbody);
+    return table;
+  }
 
-  constructor(newElementId, columns, data, options){
-    this.#requiredScriptSrcs.forEach(src=>DEBUG.loadJS(src));
-    // TODO: read https://github.com/6pac/SlickGrid/blob/master/examples/example5-collapsing.html to figure out what is needed for my stuff.
+  /**
+   * Gets the header row for the song view table.
+   * Columns:
+   *  - Checkbox (onclick == checkboxHeaderOnChange)
+   *  - Name (onclick == headerTextCellonClick)
+   *  - Title (onclick == headerTextCellonClick)
+   *  - Tags (onclick == tagsHeaderOnClick)
+   * @returns <tr>
+   */
+  static getHeaderRow() {
+    var tr = document.createElement("tr");
+    tr.classList.add("headerRow");
+    var checkbox = this.#getCheckboxCell();
+    checkbox.onchange = this.#checkboxHeaderOnChange;
+    tr.appendChild(checkbox);
+    var name = this.#getTextCell("Name");
+    name.setAttribute("idx",1);
+    name.onclick = this.#headerTextCellonClick;
+    tr.appendChild(name);
+    var title = this.#getTextCell("Title");
+    title.setAttribute("idx",2);
+    title.onclick = this.#headerTextCellonClick;
+    tr.appendChild(title);
+    var tags = this.#getTagsCell("Tags");
+    tags.onclick = this.#tagsHeaderOnClick;
+    tr.appendChild(tags);
+    return tr;
+  }
+  /**
+   * Gets the table row for a given song object blurb.
+   * @param {object} song the song object
+   * @returns <tr>
+   */
+  static getDataRowFromSong(song) {
+    var tr = document.createElement("tr");
+    tr.classList.add("songRow");
+    tr.appendChild(this.#getCheckboxCell());
+    tr.appendChild(this.#getTextCell(song.artist));
+    tr.appendChild(this.#getTextCell(song.name));
+    tr.appendChild(this.#getTagsCell(song.tags));
+    return tr;
   }
   
+  /**
+   * Gets a checkbox cell. Defaults to unchecked.
+   * @param {boolean} checked boolean for checked or not
+   * @returns <td> element.
+   */
+  static #getCheckboxCell(checked=false){
+    var td = document.createElement("td");
+    td.classList.add("xC");
+    var checkbox = document.createElement("input");
+    checkbox.setAttribute("type","checkbox");
+    if (checked) {
+      checkbox.checked = true;
+    }
+    td.appendChild(checkbox);
+    return td;
+  }
 
+  /**
+   * Gets the formatted cell with the given text.
+   * @param {string} txt the text to add
+   * @returns <td> element.
+   */
+  static #getTextCell(txt){
+    var td = document.createElement("td");
+    td.classList.add("tC");
+    td.appendChild(document.createTextNode(txt));
+    return td;
+  }
+
+  /**
+   * Gets the formatted cell with the given list of tags.
+   * @param {Array[string]} tags list of tags
+   * @returns <td> element.
+   */
+  static #getTagsCell(tags){
+    var td = document.createElement("td");
+    td.classList.add("lC");
+    var ul = document.createElement("ul");
+    if (Array.isArray(tags)) {
+      tags.forEach(tag=>{
+        var li = document.createElement("li");
+        var txt = document.createTextNode(tag);
+        li.appendChild(txt);
+        ul.appendChild(li);
+      });
+    }
+    td.appendChild(ul);
+    return td;
+  }
+  
+  static #headerTextCellonClick(event) {
+    var src = event.target;
+    const modeMap = {
+      '⬇️':'⬆️',
+      '⬆️':undefined,
+      undefined:'⬇️',
+      '':'⬇️'
+    }
+    var currentMode = src.attributes["sorted_mode"]?.nodeValue;
+    var nextMode = modeMap[currentMode];
+    // update title text
+    if (currentMode) {
+      src.innerText = src.innerText.replace(currentMode, nextMode || '');
+    } else {
+      src.innerText = `${src.innerText.trim()} ${nextMode}`;
+    }
+    // update attribute
+    src.setAttribute("sorted_mode",nextMode || '');
+    // do the sorting
+    var node = src;
+    while (!node.id) {
+      node = node.parentNode;
+    }
+    var uid = node.id.split("_",2)[1];
+    SongView.#sortTableBodyByIdx(uid, parseInt(src.attributes['idx'].nodeValue), nextMode);
+
+  }
+
+  static #sortTableBodyByIdx(tableId, columnIndex, order) {
+    if (!(['⬇️','⬆️'].includes(order))) {
+      return;
+    }
+    var tbody = document.querySelector(`#tbody_${tableId}`);
+    if (!tbody) {
+      return;
+    }
+    var rows = tbody.querySelectorAll("tr");
+    function compareColVal(row1,row2) {
+      if (order == '⬇️') {
+        return row1.children[columnIndex].innerText > row2.children[columnIndex].innerText;
+      } else {
+        return row1.children[columnIndex].innerText < row2.children[columnIndex].innerText;
+      }
+      
+    }
+    tbody.replaceChildren();
+    Array.from(rows).sort(compareColVal).forEach(row=>{
+      tbody.appendChild(row);
+    })
+    
+  }
+
+  static #tagsHeaderOnClick(event) {
+
+  }
+  /**
+   * Handles action when a checkbox header is changed. 
+   * TODO: figure out what we want to do later.
+   * @param {event} change 
+   */
+  static #checkboxHeaderOnChange(change) {
+    if (change.target.checked) {
+      // todo: what to do when it is checked
+      Logger.log("checkbox header was checked!",1)
+    } else {
+      // todo what to do when it is unchecked
+      Logger.log("checkbox header was unchecked!",1)
+    }
+  }
+
+  static attachStyleSheet() {
+    var styleSheet = document.querySelector("style");
+    if (!styleSheet) {
+      styleSheet = document.createElement("style");
+      document.appendChild(styleSheet);
+    }
+    const styles = [
+      // todo: add styles here:
+      `thead.headerRow {}`
+      `td.xC {}`,
+      `td.tC {}`,
+      `td.lC {}`,
+    ];
+    styleSheet.innerHTML = styleSheet.innerHTML + styles.join("\n");
+  }
 }
+
+
