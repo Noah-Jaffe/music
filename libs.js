@@ -595,7 +595,7 @@ class SongView {
     title.setAttribute("idx",2);
     title.onclick = this.#headerTextCellonClick;
     tr.appendChild(title);
-    var tags = this.#getTagsCell("Tags");
+    var tags = this.#getTextCell("Tags");
     tags.onclick = this.#tagsHeaderOnClick;
     tr.appendChild(tags);
     return tr;
