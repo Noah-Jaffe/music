@@ -12,7 +12,7 @@ class Util {
   static async get_successful_fetch(url, max_attempts = 10) {
     function delay_until_connection(timeout_sec) {
       // Sleep until onLine or timeout.
-      let end_at = Date.now() + timeout_sec * 1000;
+      var end_at = Date.now() + timeout_sec * 1000;
       while (!window.navigator.onLine) {
         if (Date.now() >= end_at) {
           throw "Timeout exception, offline for too long!";
@@ -20,7 +20,7 @@ class Util {
       }
     }
     var attempt = 0;
-    let result = null;
+    var result = null;
     while (result == null && attempt++ < max_attempts) {
       try {
         return await fetch(url);
@@ -44,8 +44,8 @@ class Util {
    */
   static async get_JSON(url) {
     Logger.log(`get_JSON(${url})`, 10);
-    let response = await get_successful_fetch(url);
-    let data = await response.json();
+    var response = await get_successful_fetch(url);
+    var data = await response.json();
     Logger.log(data, 10);
     return data;
   }
@@ -80,7 +80,7 @@ class Util {
    * @param {*} FILE_URL 
    */
   static loadJS(FILE_URL) {
-    let scriptEle = document.createElement("script");
+    var scriptEle = document.createElement("script");
   
     scriptEle.setAttribute("src", FILE_URL);
     scriptEle.setAttribute("type", "text/javascript");
@@ -516,14 +516,14 @@ class DEBUG {
 
     const types = [];
 
-    for (let ev in window) {
+    for (var ev in window) {
       if (/^on/.test(ev)) types[types.length] = ev;
     }
 
-    let elements = [];
-    for (let i = 0; i < allElements.length; i++) {
+    var elements = [];
+    for (var i = 0; i < allElements.length; i++) {
       const currentElement = allElements[i];
-      for (let j = 0; j < types.length; j++) {
+      for (var j = 0; j < types.length; j++) {
         if (typeof currentElement[types[j]] === "function") {
           elements.push({
             node: currentElement,
@@ -553,8 +553,8 @@ class SongView {
    * @param {Array[song]} songdb the song array (from the songs.json/songs.js)
    * @returns <table>
    */
-  static getTableFromSongDb(songdb) {
-    var uid = crypto.randomUUID().replace("-","");
+  static getTableFromSongDb(songdb, uid = null) {
+    var uid = uid ?? crypto.randomUUID().replace("-","");
     var table = document.createElement("table");
     table.setAttribute("id",`table_${uid}`);
     var thead = document.createElement("thead");
@@ -752,4 +752,408 @@ class SongView {
   }
 }
 
+class Song {
+  constructor(artist, name, srcs=[], thumb=null, tags=[], _uid=null) {
+      this.artist = artist;
+      this.name = name;
+      this.tags = tags;
+      this.thumb = thumb;
+      if (!Array.isArray(srcs) || srcs.length == 0) {
+        Logger.log(`Error, bad song! Requires at least one src in the srcs array!`);
+        throw Error(`Error, bad song! Requires at least one src in the srcs array!`);
+      }
+      this.srcs = srcs;
+      this._uid = _uid ?? `${artist}/${name}`;
 
+  }
+
+  getName(){ return this.name; }
+  getArtist() { return this.artist; }
+  getHash() { return this._uid; }
+  
+  /**
+   * @returns array of <source> from this song's srcs.
+   */
+  getSourcesElements() {
+    return this.srcs.map(e=> {
+      var src = document.createElement("source");
+      src.setAttribute("src", e);
+      return src;
+    });
+  }
+}
+class AudioPlayer{
+  #playOrderModeKeys = [
+    '🔀',
+    '🔃',
+    '🔂',
+    // '🔁',
+    // '🔄'
+  ];
+
+  constructor(songlist=null) {
+    this.uid = crypto.randomUUID().replace("-","");
+
+    // controls
+    this.player = this.#generateAudioElement();
+    this.orderMode = this.#generatePlayOrderModeButton();
+    this.skip = this.#generateSkipButton();
+    this.markTimestamp = this.#generateMarkTimestampButton();
+    this.muteToggle = this.#generateToggleMuteButton();
+    this.ban = this.#generateBanButton();
+    this.songSelector = this.#generateSongSelector();
+
+    // internal usage data
+    this.playerHistory = [];
+    this.banList = new Set();
+    this.currentSong = null;
+    this.songlist = [];
+  }
+
+  
+
+  /**
+   * Bans the given song from being played again, if it is currently playing it will call skipCurrentSong
+   * @param {Song} song song to ban (by .hash)
+   */
+  banSong(song) {
+    if (song instanceof Song) {
+      this.banList.add(song.getHash());
+      Logger.log(`Added to banlist: ${song.getName()} by ${song.getArtist()}`);
+    }
+    if (this.currentSong == song) {
+      this.goNextSong();
+    }
+  }
+
+  /**
+   * This func takes care of the logic for which song should be loaded next.
+   * Filters out recently played, banned songs, or songs not in the current playlist.
+   * Calls #loadSongIntoPlayer with the new song to play.
+   */
+  goNextSong() {
+    if (!this.currentSong) {
+      Logger.log("Not currently playing anything, was this intentional?",0)
+    }
+    var currentModeKey = this.orderMode.textContent;
+    var nextSong = null;
+    if (currentModeKey == '🔂') {
+      // REPEAT
+      nextSong = this.currentSong;
+    } else {
+      Logger.log(`need to implement logic for getting next song when mode is ${currentModeKey}`);
+    }
+    
+    if (nextSong == null) {
+      Logger.log("nextSong should not be null when you get to this point, aborting goNextSong")
+      return;
+    }
+
+    this.#loadSongIntoPlayer(nextSong);
+  }
+
+  /**
+   * Action for when you want to mark the timestamp from the current song.
+   */
+  markCurrentTimestamp() {
+    var currentTime = this.player.currentTime;
+    if (this.currentSong && currentTime) {
+      this.currentSong.add(currentTime);
+      Logger.log(`Marked timestamp for ${this.currentSong.getName()} by ${this.currentSong.getArtist()} at ${Util.sec_to_human_readable_timestamp(currentTime)}`);
+    }
+  }
+
+  /**
+   * Adds a song to the internal list of songs.
+   * @argument {*} any, dynamic number of arguments, where each argument is a 
+   * json object representing a song, or a song object itself.
+   */
+  addSong() {
+    var songHashes = new Set(this.songlist.map(e=>e.getHash()));
+    for (var arg of arguments) {
+      var songToAdd = null;
+      if (arg instanceof Song) {
+        songToAdd = arg;
+      } else {
+        try {
+          songToAdd = new Song(arg);
+        } catch {
+          Logger.log(`Unable to convert ${arg} to a song!`,3)
+        }
+      }
+    }
+    if (songToAdd) {
+      // add the song if it is not already in the list.
+      var songHash = songToAdd.getHash()
+      if (! songHashes.has(songHash)) {
+        this.songlist.push(songToAdd);
+        songHashes.add(songHash);
+      }
+    }
+    this.updateSongListVisuals();
+  }
+
+  /**
+   * @returns <div> with the audio controls, audio player, and song selector elements.
+   */
+  getAudioPlayerUIElements() {
+    var div = document.createElement("div");
+    var controlsDiv = document.createElement("div");
+    controlsDiv.setAttribute("id", `player_controls_${this.uid}`);
+    controlsDiv.appendChild(this.orderMode);
+    controlsDiv.appendChild(this.skip);
+    controlsDiv.appendChild(this.markTimestamp);
+    controlsDiv.appendChild(this.muteToggle);
+    controlsDiv.appendChild(this.ban);
+    div.appendChild(controlsDiv);
+    var songSelectorDiv = document.createElement("div");
+    songSelectorDiv.appendChild(this.songSelector);
+    div.appendChild(songSelectorDiv);
+    var audioDiv = document.createElement("div");
+    audioDiv.appendChild(this.player);
+    div.appendChild(audioDiv);
+    return div;
+  }
+
+  #generateAudioElement(){
+    var player = document.createElement("audio");
+    player.setAttribute("id",`ACTIVE_PLAYER_${uid}`);
+    player.setAttribute("controls",true);
+    player.setAttribute("autoplay",true);
+    return player;
+  }
+  
+  /**
+   * Gets the play order mode button 
+   * 🔀 shuffle
+   * 🔃 seqential
+   * 🔂 repeat single
+   * 🔁 ?
+   * 🔄 ?
+   * @returns <button> with eventlisteners already attached.
+   */
+  #generatePlayOrderModeButton() {
+    var button = document.createElement("button");
+    button.setAttribute("id",`play_order_mode_${this.uid}`);
+    button.textContent = playOrderModeKeys[0];
+    
+    button.addEventListener("click", (event) => {
+      event.target.textContent = playOrderModeKeys[(Math.max(playOrderModeKeys.indexOf(event.target.textContent), 0) + 1) % playOrderModeKeys.length];
+      Logger.log(`Updated play mode order to ${event.target.textContent}`,1);
+    });
+
+    return button;
+  }
+  /**
+   * Gets the skip song button ⏭
+   * @returns <button> with eventlisteners already attached.
+   */
+  #generateSkipButton() {
+    const buttonText = '⏭';
+    
+    var button = document.createElement("button");
+    button.setAttribute("id",`skip_song_${this.uid}`);
+    button.textContent = buttonText;
+
+    
+    button.addEventListener("click", (event) => {
+      // TODO: implement this bit
+      Logger.log(`TODO: implement ${event.target.textContent}`,1);
+    });
+
+    return button;
+  }
+  
+  /**
+   * Gets the mark timestamp of current song button ⭐
+   * @returns <button> with eventlisteners already attached.
+   */
+  #generateMarkTimestampButton() {
+    const buttonText = '⭐';
+    
+    var button = document.createElement("button");
+    button.setAttribute("id",`mark_timestamp_${this.uid}`);
+    button.textContent = buttonText;
+
+    
+    button.addEventListener("click", (event) => {
+      // TODO: implement this bit
+      Logger.log(`TODO: implement ${event.target.textContent}`,1);
+    });
+
+    return button;
+  }
+
+  /**
+   * Gets the ban song button ❌
+   * @returns <button> with eventlisteners already attached.
+   */
+  #generateBanButton() {
+    const buttonText = '❌';
+    
+    var button = document.createElement("button");
+    button.setAttribute("id",`mark_timestamp_${this.uid}`);
+    button.textContent = buttonText;
+      
+      
+    button.addEventListener("click", (event) => {
+      this.banSong(this.currentSong);
+    });
+
+    return button;
+  }
+  /**
+   * Gets the mute toggle button 
+   * 🔇 muted
+   * 🔊 not muted
+   * @returns <button> with eventlisteners already attached.
+   */
+  #generateToggleMuteButton() {
+    const muteModes = [
+      '🔊', // not muted,
+      '🔇', // muted
+    ];
+    var button = document.createElement("button");
+    button.setAttribute("id",`mute_mode_${this.uid}`);
+    button.textContent = muteModes[0];
+    
+    button.addEventListener("click", (event) => {
+      event.target.textContent = muteModes[(Math.max(muteModes.indexOf(event.target.textContent), 0) + 1) % muteModes.length];
+      this.player.muted = event.target.textContent == '🔇';
+      Logger.log(`Player sound was ${this.player.muted ? '' : 'un'}muted.`,1);
+    });
+
+    return button;
+  }
+
+  /**
+   * Gets however we are going to visualize the song list selection
+   */
+  #generateSongSelector() {
+    return SongView.getTableFromSongDb(this.songlist, this.uid);
+  }
+
+
+  /**
+   * TODO: implement this func
+   * - update player history
+   * - update selector ui
+   * - update page title
+   * - update audio sources
+   * - update mediasession controls
+   * - any other updates neeeded?
+   * @param {Song} nextSong the next song to be played
+   */
+  #loadSongIntoPlayer(nextSong) {
+    Logger.log(`TODO: implement loadSongIntoPlayer logic.`);
+
+    this.currentSong = nextSong;
+    Logger.log(`Set current song to ${this.currentSong.getName()} by ${this.currentSong.getArtist()}`,2);
+  }
+}
+
+class CollapsableContent {
+  static TagPrefix = "toggle_";
+
+  static attachStyleSheet() {
+    var styleSheet = document.querySelector("style");
+    if (!styleSheet) {
+      styleSheet = document.createElement("style");
+      document.appendChild(styleSheet);
+    }
+    const styles = [
+      // todo: add styles here:
+      `.collapseToggle {
+      background-color: #777;
+      color: white;
+      cursor: pointer;
+      padding: 18px;
+      width: 100%;
+      border: none;
+      text-align: left;
+      outline: none;
+      font-size: 15px;
+      }`,
+      `.collapseToggle:hover {
+      background-color: #555;
+      }`
+    ];
+    styleSheet.innerHTML = styleSheet.innerHTML + styles.join("\n");
+  }
+
+  /**
+   * Adds the collapsable event to all existing elements that have a CollapsableContent.TagPrefix class tag.
+   */
+  static enablePageToggles() {
+    Array.from(
+      document.querySelectorAll(CollapsableContent.TagPrefix)
+    ).forEach((e) => e.addEventListener("click", CollapsableContent.toggleCollapseEvent));
+  }
+
+  /**
+   * Inserts an button before/adjacent to the given content node.
+   * @param {HTMLElement} contentNode The html element to convert to toggle button + toggled content.
+   * @param {string} toggleButtonContent the content for the toggle button to display.
+   * @returns <button> the button that was inserted for the toggle group.
+   */
+  static insertToggleButtonForElement(contentNode, toggleButtonContent='Toggle button') {
+    var togglebutton = document.createElement("button");
+    var groupId = contentNode.getAttribute("id");
+    if (! groupId) {
+      groupId = crypto.randomUUID().replace("-","");
+      contentNode.setAttribute("id", groupId);
+    } 
+    togglebutton.setAttribute("id", `${CollapsableContent.TagPrefix}${groupId}`);
+    togglebutton.textContent = toggleButtonContent;
+    togglebutton.classList.add("collapseToggle");
+    contentNode.insertAdjacentElement('beforebegin', togglebutton);
+    CollapsableContent.setAsTogglePair(togglebutton, contentNode);
+    return togglebutton;
+  }
+  /**
+   * @param {HTMLElement} header The element, when clicked will hide the content.
+   * @param {HTMLElement} content The content to be hidden.
+   */
+  static setAsTogglePair(header, content) {
+    header.addEventListener("click", () => CollapsableContent.#toggleContentAction(content));
+  }
+  
+  /**
+   * The toggle collapse event function.
+   * @param {Event} event the event.
+   * @returns 
+   */
+  static toggleCollapseEvent(event) {
+    let src = undefined;
+    if (this instanceof HTMLElement) {
+      src = this;
+    } else if (event instanceof HTMLElement) {
+      src = event;
+    } else if (event instanceof Event) {
+      src = event.target;
+    } else {
+      Logger.log(`Improper usage of toggleCollapse! unknown src for call! ${arguments}`, 5);
+      return;
+    }
+
+    let toToggle = (
+      src.id.startsWith(CollapsableContent.TagPrefix) ? 
+        document.getElementById(src.id.replace(CollapsableContent.TagPrefix, "")): 
+        null)
+      ?? 
+      src.nextElementSibling;
+    if (!(toToggle instanceof HTMLElement)) {
+      Logger.log(`unable to find toggleable content for the given source: ${src.id ?? src.outerHTML.toString()}`, 5);
+      return;
+    }
+    CollapsableContent.#toggleContentAction(toToggle);
+  }
+
+  /**
+   * Executes the toggle action for a collapse.
+   * @param {HTMLElement} element the element to be collapsed.
+   */
+  static #toggleContentAction(element) {
+    element.hidden = !element.hidden;
+  }
+}

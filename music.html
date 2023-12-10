@@ -131,6 +131,10 @@
 		}
 		
 		async function TEMP_ALLOW_MUSICPLAYER_TO_WORK() {
+			// enable hiding of songlist
+			CollapsableContent.attachStyleSheet();
+			CollapsableContent.insertToggleButtonForElement(document.querySelector("#song_table"), "toggle song table display");
+			
 			// temp func just so that the musicplayer thing can play something.
 			var audio = document.querySelector("#ACTIVE_PLAYER");
 			async function playasong(){
@@ -143,9 +147,13 @@
 							srcObj.setAttribute("src",src);
 							srcObj.setAttribute("type","video/mp4");
 							nextSongSrcs.push(srcObj);
-						})
+						});
+						// temp update document title?
+						Logger.log(`Playing: ${next._uid}`);
+						document.title = next._uid;
 					}
 				}
+				// TODO: figure out elegant solution to swapping audio sources realtime?
 				//audio.replaceChildren(...nextSongSrcs);
 				audio.src = nextSongSrcs[0].src;
 				await audio.play();
