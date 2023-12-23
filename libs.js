@@ -170,8 +170,8 @@ class Logger {
   static log(val, timeout = 0) {
     console.log(val);
     var tbl =
-      this.loggerContainer ??
-      document.getElementById(this.loggerContainerTableId);
+      this.#loggerContainer?.querySelector("table") ??
+      document.getElementById(this.#loggerContainerTableId);
     if (!tbl) {
       return;
     }
