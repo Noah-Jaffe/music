@@ -1,4 +1,5 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
 	<meta charset="UTF-8">
@@ -55,7 +56,7 @@
 			font-family: Consolas, monaco, monospace;
 		}
 	</style>
-	<script type="text/javascript" src="libs.js"><!--retreive the songs from external file--></script>
+	<script type="text/javascript" src="libs.js" ></script>
 	<script>
 		/**
 		 * Globals
@@ -191,11 +192,11 @@
 	<div>
 		
 		<div id="audio_control_buttons">
-			<button id="audio_control_play_order_mode">🔀🔁🔂🔃🔄</button>
-			<button id="audio_control_skip">⏭</button>
-			<button id="audio_control_mark_timestamp">⭐</button>
-			<button id="audio_control_ban">❌</button>
-			<button id="audio_control_volume_toggle">🔇🔊</button>
+			<button id="audio_control_play_order_mode" aria-label="play order">🔀🔁🔂🔃🔄</button>
+			<button id="audio_control_skip" aria-label="skip">⏭</button>
+			<button id="audio_control_mark_timestamp" aria-label="mark timestamp">⭐</button>
+			<button id="audio_control_ban" aria-label="ban song">❌</button>
+			<button id="audio_control_volume_toggle" aria-label="toggle mute">🔇🔊</button>
 		</div>
 		<audio controls autoplay id="ACTIVE_PLAYER">
 			<!-- Default source is empty sound, enables play button/user interaction -- >
