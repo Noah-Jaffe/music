@@ -159,7 +159,7 @@ class Logger {
       styleSheet = document.createElement("style");
       document.appendChild(styleSheet);
     }
-    //const styles = `\n#${this.#loggerContainerId}:has(#${this.#loggerContainerTableId}:empty) { display: none; } /* The :has modifier does not work in firefox just yet. */\n#${this.#loggerContainerId} { font-size:10pt; word-wrap:break-word; font-family: Consolas, monaco, monospace; }`
+    const styles = `\n#${this.#loggerContainerId}:has(#${this.#loggerContainerTableId}:empty) { display: none; } /* The :has modifier does not work in firefox just yet. */\n#${this.#loggerContainerId} { font-size:10pt; word-wrap:break-word; font-family: Consolas, monaco, monospace; }`
     styleSheet.innerHTML = styleSheet.innerHTML + styles;
   }
 
