@@ -107,6 +107,7 @@ class Logger {
   static #loggerContainerTableId = "__LOGGER_CONTAINER_TABLE__";
 
   static setupLogger(elementToAttachTo) {
+    window.alert(elementToAttachTo); // debug
     this.attachLoggerTable(elementToAttachTo);
     this.attachLoggerStyleSheet();
   }
