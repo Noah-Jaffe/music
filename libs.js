@@ -107,7 +107,6 @@ class Logger {
   static #loggerContainerTableId = "__LOGGER_CONTAINER_TABLE__";
 
   static setupLogger(elementToAttachTo) {
-    window.alert(elementToAttachTo); // debug
     this.attachLoggerTable(elementToAttachTo);
     this.attachLoggerStyleSheet();
   }
@@ -149,6 +148,7 @@ class Logger {
     table.setAttribute("id", this.#loggerContainerId);
     elementToAttachTo.appendChild(table);
     this.loggerContainer = table;
+    window.alert(document.querySelector(`#${this.#loggerContainerId}`).innerHTML); // debug
   }
 
   /**
